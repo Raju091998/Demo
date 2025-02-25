@@ -1,7 +1,6 @@
 streamlit
-openai-whisper
-torch
-torchaudio
-numpy
+torch==2.1.0
+torchaudio==2.1.0
 whisper
 ffmpeg-python
+openai-whisper
