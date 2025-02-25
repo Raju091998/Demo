@@ -1,63 +1,61 @@
 import os
 import whisper
-import ffmpeg
 import streamlit as st
+import torch
+import ffmpeg
 import subprocess
+import asyncio
 
-# Ensure FFmpeg is in PATH
-FFMPEG_PATH = r"C:\ffmpeg\bin"  # Adjust this path if needed
+# Ensure FFmpeg is accessible
+FFMPEG_PATH = r"/usr/bin/ffmpeg"  # Default path for Streamlit Cloud
 os.environ["PATH"] += os.pathsep + FFMPEG_PATH
 
-# Check if FFmpeg is accessible
+# Ensure Torch is properly installed
+st.write(f"Torch version: {torch.__version__}")
+
+# Check FFmpeg installation
 try:
     subprocess.run(["ffmpeg", "-version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 except FileNotFoundError:
-    st.error("FFmpeg not found! Please install FFmpeg and add it to PATH.")
+    st.error("FFmpeg is not installed. Please install it.")
     st.stop()
 
-# Streamlit UI
+# Handle event loop issue
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    asyncio.set_event_loop(asyncio.new_event_loop())
+
 st.title("🎙️ Audio-to-Text Converter (Whisper)")
 
-# File Upload
 uploaded_file = st.file_uploader("Upload an audio file", type=["mp3", "wav", "m4a"])
 
 if uploaded_file:
     st.audio(uploaded_file, format="audio/mp3")
 
     # Save uploaded file
-    file_ext = uploaded_file.name.split('.')[-1]
-    file_path = f"temp_audio.{file_ext}"
+    file_path = f"temp_audio.{uploaded_file.name.split('.')[-1]}"
     with open(file_path, "wb") as f:
         f.write(uploaded_file.read())
 
-    # Placeholder for messages
-    msg_placeholder = st.empty()
-
     # Convert to WAV if needed
     wav_path = "converted_audio.wav"
-    if file_ext != "wav":
-        msg_placeholder.info("Converting to WAV format for better compatibility...")
+    if not file_path.endswith(".wav"):
         try:
             ffmpeg.input(file_path).output(wav_path, format="wav").run(overwrite_output=True)
-            file_path = wav_path  # Use the converted file
+            file_path = wav_path
         except Exception as e:
             st.error(f"FFmpeg conversion error: {e}")
-            os.remove(file_path)  # Remove original file on error
+            os.remove(file_path)
             st.stop()
 
     # Load Whisper model
     model = whisper.load_model("base")
 
-    # Show transcribing message
-    msg_placeholder.info("Transcribing audio... This may take a while.")
-
     # Transcribe audio
     result = model.transcribe(file_path)
 
-    # Remove the loading message
-    msg_placeholder.empty()
-
-    # Delete the audio file after transcription
+    # Remove audio file after transcription
     try:
         os.remove(file_path)
     except Exception as e:
