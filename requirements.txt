@@ -1,6 +1,6 @@
 streamlit
-torch==2.1.0
-torchaudio==2.1.0
 whisper
-ffmpeg-python
 openai-whisper
+ffmpeg-python
+torch==2.1.0+cpu -f https://download.pytorch.org/whl/cpu.html
+torchaudio==2.1.0+cpu -f https://download.pytorch.org/whl/cpu.html
