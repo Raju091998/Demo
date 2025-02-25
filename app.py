@@ -1,66 +1,43 @@
 import os
-import whisper
 import streamlit as st
-import torch
-import ffmpeg
+import whisper
 import subprocess
-import asyncio
+from tempfile import NamedTemporaryFile
 
-# Ensure FFmpeg is accessible
-FFMPEG_PATH = r"/usr/bin/ffmpeg"  # Default path for Streamlit Cloud
-os.environ["PATH"] += os.pathsep + FFMPEG_PATH
-
-# Ensure Torch is properly installed
-st.write(f"Torch version: {torch.__version__}")
-
-# Check FFmpeg installation
+# Ensure FFmpeg is installed (Required for audio processing)
 try:
     subprocess.run(["ffmpeg", "-version"], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 except FileNotFoundError:
-    st.error("FFmpeg is not installed. Please install it.")
+    st.error("FFmpeg is not installed on the server. Please install it.")
     st.stop()
 
-# Handle event loop issue
-try:
-    asyncio.get_running_loop()
-except RuntimeError:
-    asyncio.set_event_loop(asyncio.new_event_loop())
+# Load the Whisper model (use "base" for better performance on Streamlit Cloud)
+model = whisper.load_model("base")
 
-st.title("🎙️ Audio-to-Text Converter (Whisper)")
+st.title("🎙️ Whisper AI Audio Transcription")
+st.write("Upload an audio file and get an instant transcription.")
 
-uploaded_file = st.file_uploader("Upload an audio file", type=["mp3", "wav", "m4a"])
+# File uploader
+uploaded_file = st.file_uploader("Choose an audio file...", type=["mp3", "wav", "m4a"])
 
-if uploaded_file:
-    st.audio(uploaded_file, format="audio/mp3")
+if uploaded_file is not None:
+    st.success("File uploaded successfully!")
 
-    # Save uploaded file
-    file_path = f"temp_audio.{uploaded_file.name.split('.')[-1]}"
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.read())
+    # Save uploaded file temporarily
+    with NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio:
+        temp_audio.write(uploaded_file.read())
+        temp_audio_path = temp_audio.name
 
-    # Convert to WAV if needed
-    wav_path = "converted_audio.wav"
-    if not file_path.endswith(".wav"):
-        try:
-            ffmpeg.input(file_path).output(wav_path, format="wav").run(overwrite_output=True)
-            file_path = wav_path
-        except Exception as e:
-            st.error(f"FFmpeg conversion error: {e}")
-            os.remove(file_path)
-            st.stop()
+    # Transcribe the audio
+    st.info("Transcribing... Please wait ⏳")
 
-    # Load Whisper model
-    model = whisper.load_model("base")
+    result = model.transcribe(temp_audio_path)
 
-    # Transcribe audio
-    result = model.transcribe(file_path)
+    # Remove "Transcribing..." message after response is ready
+    st.success("Transcription complete! ✅")
 
-    # Remove audio file after transcription
-    try:
-        os.remove(file_path)
-    except Exception as e:
-        st.warning(f"Could not delete temporary file: {e}")
+    # Display the transcription
+    st.text_area("Transcription:", result["text"], height=250)
 
-    # Display transcription
-    st.subheader("📝 Transcribed Text")
-    st.write(result["text"])
+    # Remove the audio file after transcription
+    os.remove(temp_audio_path)
